@@ -1,0 +1,134 @@
+src/detector.py
+What is this file?
+Think of detector.py as the eyes of your system.
+It loads the YOLOv8 model and looks at each video frame. It finds every person in that frame, draws a green box around them, and returns how many people it found and where they are.
+Simple analogy: Like a security guard who watches a screen and circles every person he sees with a marker.
+How it connects:
+main.py
+  → calls detector.py
+      → uses YOLOv8 model
+          → returns people count + their positions
+              → positions go to zones.py and heatmap.py later
+
+
+src/density.pyWhat is this file?
+Think of density.py as the crowd counter and judge.It takes the people count from detector.py and does two things:
+
+Counts how many people are in the frame
+Judges if that count is Low, Medium, or High density
+Simple analogy: Like a mall security system that counts how many people entered and decides if the mall is empty, busy, or dangerously overcrowded.How it connects:
+detector.py → returns people count
+    → density.py receives that count
+        → returns "Low" / "Medium" / "High"
+            → risk.py uses this label later
+
+
+src/optical_flow.py
+What is this file?
+Think of optical_flow.py as the motion detector of your system.
+It compares two consecutive video frames and calculates how much things moved between them. If people are walking slowly — low motion. If people are running or panicking — high motion.
+Simple analogy: Like comparing two photographs taken 1 second apart and measuring how much everything shifted.
+How it connects:
+main.py sends two frames (previous + current)
+    → optical_flow.py compares them
+        → returns motion magnitude (a number)
+            → returns "Normal" or "Fast"
+                → risk.py uses this label
+
+
+src/risk.py
+What is this file?
+Think of risk.py as the brain and decision maker of your system.
+It takes two things:
+
+Density label from density.py → "Low" / "Medium" / "High"
+Motion label from optical_flow.py → "Normal" / "Fast"
+
+And combines them into one final decision → 🟢 Safe / 🟡 Medium Risk / 🔴 High Risk
+Simple analogy: Like a doctor who looks at two test results (blood pressure + heart rate) and gives a final verdict on your health.
+How it connects:
+density.py  → gives "Low" / "Medium" / "High"
+optical_flow.py → gives "Normal" / "Fast"
+    → both go into risk.py
+        → risk.py outputs "Safe" / "Medium Risk" / "High Risk"
+            → alert.py uses this to trigger alerts
+
+
+
+src/zones.pyWhat is this file?
+Think of zones.py as the area inspector of your system.It divides the video frame into 4 equal zones (like cutting a pizza into 4 slices) and checks which zone has too many people in it.Simple analogy: Like a stadium divided into 4 sections — security checks which section is overcrowded and needs attention.
+
+How the zones look:
+┌─────────────┬─────────────┐
+│             │             │
+│  Zone 1     │  Zone 2     │
+│  Top-Left   │  Top-Right  │
+│             │             │
+├─────────────┼─────────────┤
+│             │             │
+│  Zone 3     │  Zone 4     │
+│  Bot-Left   │  Bot-Right  │
+│             │             │
+└─────────────┴─────────────┘
+How it connects:
+detector.py → returns center points of every person
+    → zones.py receives those center points
+        → checks which zone each person falls into
+            → counts people per zone
+                → flags crowded zones
+                    → main.py displays it
+
+
+
+What is this file?
+Think of heatmap.py as the heat vision of your system.It creates a colourful overlay on the video that shows where people are concentrated. Areas with many people glow red/yellow, empty areas stay blue/green.Simple analogy: Like a weather map — red areas are "hot" (crowded), blue areas are "cold" (empty).How the heatmap looks:
+┌─────────────────────────────┐
+│  blue   blue   RED   blue   │  ← RED = many people here
+│  blue   YELLOW yellow blue  │  ← YELLOW = medium crowd
+│  blue   blue   blue  blue   │  ← blue = empty
+└─────────────────────────────┘How it connects:
+detector.py → returns center points of every person
+    → heatmap.py receives those center points
+        → builds a heat layer (brighter where more people)
+            → blends it over the video frame
+                → main.py displays the result
+
+
+
+Step 9 — src/alert.py
+What is this file?
+Think of alert.py as the alarm system of your system.
+It watches the risk level every frame. If risk stays High for too many consecutive frames — it triggers a big visual alert on screen saying "HIGH RISK ALERT!"
+Simple analogy: Like a fire alarm — it doesn't go off the moment it detects one smoke particle. It waits to confirm the danger is real, then rings loudly.
+Why we wait for consecutive frames:
+Frame 1 → High Risk  ← don't alert yet
+Frame 2 → High Risk  ← don't alert yet
+Frame 3 → Medium     ← reset counter
+Frame 4 → High Risk  ← start again
+...
+Frame 10 consecutive High Risk → 🚨 ALERT!
+This prevents false alarms from a single bad frame.
+How it connects:
+risk.py → returns "Safe" / "Medium Risk" / "High Risk"
+    → alert.py watches that label every frame
+        → counts consecutive High Risk frames
+            → if count > threshold → triggers alert
+                → draws alert on frame
+                    → plays sound (optional)
+
+
+main.pyWhat is this file?
+This is the heart of the entire project.It ties every single module together and runs the full pipeline frame by frame. Think of it as the director — it tells every module when to work, collects their results, and puts everything on screen.How it works frame by frame:
+Open video
+    → read one frame
+        → detect people        (detector.py)
+        → count + density      (density.py)
+        → measure motion       (optical_flow.py)
+        → calculate risk       (risk.py)
+        → analyze zones        (zones.py)
+        → update heatmap       (heatmap.py)
+        → check alert          (alert.py)
+        → display everything   (cv2.imshow)
+        → save frame to output video
+    → read next frame
+        → repeat until video ends
